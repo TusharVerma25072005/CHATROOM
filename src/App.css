@@ -243,6 +243,13 @@
 }
 .lightbox img { max-width: 85vw; max-height: 85vh; border-radius: 6px; }
 
+/* Audio in messages */
+.msg-audio {
+  max-width: 280px;
+  height: 36px;
+  margin-top: 4px;
+}
+
 @media (max-width: 640px) {
   .sidebar { display: none; }
 }

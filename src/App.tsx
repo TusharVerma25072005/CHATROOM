@@ -2,25 +2,23 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import "./App.css";
 
 interface Features {
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   fileSize: number;
-  sharpness: number;
-  brightness: number;
-  contrast: number;
-  edgeDensity: number;
+  sharpness?: number;
+  brightness?: number;
+  contrast?: number;
+  edgeDensity?: number;
+  duration?: number;
+  sampleRate?: number;
+  rmsEnergy?: number;
 }
 
 interface Comparison {
-  psnr: number;
+  psnr?: number;
   compressionRatio: number;
   sizeSaved: number;
-  featureMatch: {
-    sharpness: number;
-    brightness: number;
-    contrast: number;
-    edgeDensity: number;
-  };
+  featureMatch: Record<string, number>;
   matchingPercentage: number;
 }
 
@@ -34,7 +32,8 @@ interface Message {
   comparison?: Comparison;
 }
 
-function AnalysisPanel({ msg }: { msg: Message }) {
+/* ── Image analysis (existing) ── */
+function ImageAnalysisPanel({ msg }: { msg: Message }) {
   const [open, setOpen] = useState(false);
   if (!msg.comparison || !msg.originalFeatures || !msg.compressedFeatures) return null;
 
@@ -55,7 +54,6 @@ function AnalysisPanel({ msg }: { msg: Message }) {
       </div>
       {open && (
         <div className="analysis-body">
-          {/* Match bar */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}>
               <span>Overall Match</span>
@@ -68,12 +66,11 @@ function AnalysisPanel({ msg }: { msg: Message }) {
             </div>
           </div>
 
-          {/* Compression Stats */}
           <div>
             <div className="section-title">Compression</div>
             <table className="data-table">
               <tbody>
-                <tr><td>PSNR</td><td>{fmt(cmp.psnr)} dB</td></tr>
+                <tr><td>PSNR</td><td>{fmt(cmp.psnr ?? 0)} dB</td></tr>
                 <tr><td>Compression Ratio</td><td>{fmt(cmp.compressionRatio)}x</td></tr>
                 <tr><td>Original Size</td><td>{kb(orig.fileSize)}</td></tr>
                 <tr><td>Compressed Size</td><td>{kb(comp.fileSize)}</td></tr>
@@ -87,7 +84,6 @@ function AnalysisPanel({ msg }: { msg: Message }) {
             </table>
           </div>
 
-          {/* Feature Comparison */}
           <div>
             <div className="section-title">Feature Comparison</div>
             <table className="data-table">
@@ -95,48 +91,146 @@ function AnalysisPanel({ msg }: { msg: Message }) {
                 <tr><th>Feature</th><th>Original</th><th>Compressed</th><th>Match</th></tr>
               </thead>
               <tbody>
+                {orig.sharpness != null && (
+                  <tr>
+                    <td>Sharpness</td>
+                    <td>{fmt(orig.sharpness)}</td>
+                    <td>{fmt(comp.sharpness ?? 0)}</td>
+                    <td className={cmp.featureMatch.sharpness >= 80 ? "val-good" : cmp.featureMatch.sharpness >= 50 ? "val-warn" : "val-bad"}>
+                      {fmt(cmp.featureMatch.sharpness)}%
+                    </td>
+                  </tr>
+                )}
+                {orig.brightness != null && (
+                  <tr>
+                    <td>Brightness</td>
+                    <td>{fmt(orig.brightness)}</td>
+                    <td>{fmt(comp.brightness ?? 0)}</td>
+                    <td className={cmp.featureMatch.brightness >= 80 ? "val-good" : cmp.featureMatch.brightness >= 50 ? "val-warn" : "val-bad"}>
+                      {fmt(cmp.featureMatch.brightness)}%
+                    </td>
+                  </tr>
+                )}
+                {orig.contrast != null && (
+                  <tr>
+                    <td>Contrast</td>
+                    <td>{fmt(orig.contrast)}</td>
+                    <td>{fmt(comp.contrast ?? 0)}</td>
+                    <td className={cmp.featureMatch.contrast >= 80 ? "val-good" : cmp.featureMatch.contrast >= 50 ? "val-warn" : "val-bad"}>
+                      {fmt(cmp.featureMatch.contrast)}%
+                    </td>
+                  </tr>
+                )}
+                {orig.edgeDensity != null && (
+                  <tr>
+                    <td>Edge Density</td>
+                    <td>{fmt(orig.edgeDensity, 4)}</td>
+                    <td>{fmt(comp.edgeDensity ?? 0, 4)}</td>
+                    <td className={cmp.featureMatch.edgeDensity >= 80 ? "val-good" : cmp.featureMatch.edgeDensity >= 50 ? "val-warn" : "val-bad"}>
+                      {fmt(cmp.featureMatch.edgeDensity)}%
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {orig.width != null && (
+            <div>
+              <div className="section-title">Dimensions</div>
+              <table className="data-table">
+                <tbody>
+                  <tr><td>Resolution</td><td>{orig.width} × {orig.height}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Audio analysis ── */
+function AudioAnalysisPanel({ msg }: { msg: Message }) {
+  const [open, setOpen] = useState(false);
+  if (!msg.comparison || !msg.originalFeatures || !msg.compressedFeatures) return null;
+
+  const cmp = msg.comparison;
+  const orig = msg.originalFeatures;
+  const comp = msg.compressedFeatures;
+  const pct = cmp.matchingPercentage ?? 0;
+  const cls = pct >= 80 ? "high" : pct >= 50 ? "med" : "low";
+
+  const fmt = (v: number, decimals = 2) => v % 1 === 0 ? String(v) : v.toFixed(decimals);
+  const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
+
+  return (
+    <div className="analysis">
+      <div className="analysis-hdr" onClick={() => setOpen(!open)}>
+        <span>🎵 {pct.toFixed(1)}% match</span>
+        <span>{open ? "▲" : "▼"}</span>
+      </div>
+      {open && (
+        <div className="analysis-body">
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}>
+              <span>Overall Match</span>
+              <strong style={{ color: cls === "high" ? "#16a34a" : cls === "med" ? "#d97706" : "#dc2626" }}>
+                {pct.toFixed(1)}%
+              </strong>
+            </div>
+            <div className="match-bar-bg">
+              <div className={`match-bar ${cls}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="section-title">Compression</div>
+            <table className="data-table">
+              <tbody>
+                <tr><td>Compression Ratio</td><td>{fmt(cmp.compressionRatio)}x</td></tr>
+                <tr><td>Original Size</td><td>{kb(orig.fileSize)}</td></tr>
+                <tr><td>Compressed Size</td><td>{kb(comp.fileSize)}</td></tr>
                 <tr>
-                  <td>Sharpness</td>
-                  <td>{fmt(orig.sharpness)}</td>
-                  <td>{fmt(comp.sharpness)}</td>
-                  <td className={cmp.featureMatch.sharpness >= 80 ? "val-good" : cmp.featureMatch.sharpness >= 50 ? "val-warn" : "val-bad"}>
-                    {fmt(cmp.featureMatch.sharpness)}%
-                  </td>
-                </tr>
-                <tr>
-                  <td>Brightness</td>
-                  <td>{fmt(orig.brightness)}</td>
-                  <td>{fmt(comp.brightness)}</td>
-                  <td className={cmp.featureMatch.brightness >= 80 ? "val-good" : cmp.featureMatch.brightness >= 50 ? "val-warn" : "val-bad"}>
-                    {fmt(cmp.featureMatch.brightness)}%
-                  </td>
-                </tr>
-                <tr>
-                  <td>Contrast</td>
-                  <td>{fmt(orig.contrast)}</td>
-                  <td>{fmt(comp.contrast)}</td>
-                  <td className={cmp.featureMatch.contrast >= 80 ? "val-good" : cmp.featureMatch.contrast >= 50 ? "val-warn" : "val-bad"}>
-                    {fmt(cmp.featureMatch.contrast)}%
-                  </td>
-                </tr>
-                <tr>
-                  <td>Edge Density</td>
-                  <td>{fmt(orig.edgeDensity, 4)}</td>
-                  <td>{fmt(comp.edgeDensity, 4)}</td>
-                  <td className={cmp.featureMatch.edgeDensity >= 80 ? "val-good" : cmp.featureMatch.edgeDensity >= 50 ? "val-warn" : "val-bad"}>
-                    {fmt(cmp.featureMatch.edgeDensity)}%
+                  <td>Space Saved</td>
+                  <td style={{ color: "#16a34a" }}>
+                    {kb(cmp.sizeSaved)} ({((cmp.sizeSaved / orig.fileSize) * 100).toFixed(1)}%)
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {/* Image Dimensions */}
           <div>
-            <div className="section-title">Dimensions</div>
+            <div className="section-title">Audio Details</div>
             <table className="data-table">
+              <thead>
+                <tr><th>Property</th><th>Original</th><th>Compressed</th><th>Match</th></tr>
+              </thead>
               <tbody>
-                <tr><td>Resolution</td><td>{orig.width} × {orig.height}</td></tr>
+                <tr>
+                  <td>Duration</td>
+                  <td>{fmt(orig.duration ?? 0)}s</td>
+                  <td>{fmt(comp.duration ?? 0)}s</td>
+                  <td className={(cmp.featureMatch.duration ?? 0) >= 80 ? "val-good" : (cmp.featureMatch.duration ?? 0) >= 50 ? "val-warn" : "val-bad"}>
+                    {fmt(cmp.featureMatch.duration ?? 0)}%
+                  </td>
+                </tr>
+                <tr>
+                  <td>RMS Energy</td>
+                  <td>{fmt(orig.rmsEnergy ?? 0, 4)}</td>
+                  <td>{fmt(comp.rmsEnergy ?? 0, 4)}</td>
+                  <td className={(cmp.featureMatch.rmsEnergy ?? 0) >= 80 ? "val-good" : (cmp.featureMatch.rmsEnergy ?? 0) >= 50 ? "val-warn" : "val-bad"}>
+                    {fmt(cmp.featureMatch.rmsEnergy ?? 0)}%
+                  </td>
+                </tr>
+                <tr>
+                  <td>Sample Rate</td>
+                  <td>{orig.sampleRate} Hz</td>
+                  <td>{comp.sampleRate} Hz</td>
+                  <td>—</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -154,12 +248,14 @@ export default function App() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [trending, setTrending] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const audioFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -192,6 +288,18 @@ export default function App() {
     };
     r.readAsDataURL(file);
   }, [file, ws, username]);
+
+  /* ── Audio file upload ── */
+  const uploadAudio = useCallback(() => {
+    if (!audioFile || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const r = new FileReader();
+    r.onload = () => {
+      ws.send(JSON.stringify({ type: "audio", sender: username, data: r.result as string }));
+      setAudioFile(null);
+      if (audioFileRef.current) audioFileRef.current.value = "";
+    };
+    r.readAsDataURL(audioFile);
+  }, [audioFile, ws, username]);
 
   const search = useCallback(async () => {
     if (!searchTerm.trim()) return;
@@ -248,6 +356,7 @@ export default function App() {
         <div className="stats">
           <span>{messages.length} msgs</span>
           <span>{messages.filter((m) => m.type === "image").length} imgs</span>
+          <span>{messages.filter((m) => m.type === "audio").length} audio</span>
         </div>
 
         <label>Bot</label>
@@ -277,7 +386,12 @@ export default function App() {
                     {m.type === "image" ? (
                       <>
                         <img className="msg-img" src={m.content} alt="" onClick={() => setLightbox(m.content)} />
-                        <AnalysisPanel msg={m} />
+                        <ImageAnalysisPanel msg={m} />
+                      </>
+                    ) : m.type === "audio" ? (
+                      <>
+                        <audio controls src={m.content} className="msg-audio" />
+                        <AudioAnalysisPanel msg={m} />
                       </>
                     ) : (
                       m.content
@@ -301,6 +415,18 @@ export default function App() {
             </div>
           )}
           {file && <button className="upload-go" onClick={upload}>Upload</button>}
+
+          {/* Audio upload */}
+          <input ref={audioFileRef} type="file" accept="audio/*" className="file-input-hidden" id="au" onChange={(e) => { if (e.target.files?.[0]) setAudioFile(e.target.files[0]); }} />
+          <label htmlFor="au" className="attach-label">🎤</label>
+          {audioFile && (
+            <div className="file-preview">
+              <span>🎵 {audioFile.name}</span>
+              <button onClick={() => { setAudioFile(null); if (audioFileRef.current) audioFileRef.current.value = ""; }}>×</button>
+            </div>
+          )}
+          {audioFile && <button className="upload-go" onClick={uploadAudio}>Upload</button>}
+
           <input type="text" placeholder="Type a message…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
           <button onClick={send}>Send</button>
         </div>
